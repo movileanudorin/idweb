@@ -1,0 +1,113 @@
+﻿@page "/transfer"
+@using BlazorApp3.Shared
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@attribute [Authorize]
+@inject HttpClient HttpClient
+@inject NavigationManager navManager
+
+<h3>Transfer</h3>
+
+@if (WalletList == null || WalletList.Count == 0)
+{
+    <div>Loading...</div>
+}
+else
+{
+    @*<div class="card" style="width: 18rem;">
+        <div class="card-body">
+            <h5 class="card-title">Wallet @wallet.Id</h5>
+            <p class="card-text">Amount: @wallet.Amount @wallet.Currency</p>
+            <p>
+                Amount:<br />
+                <input @bind="transferData.Amount" />
+            </p>
+            <p>
+                Username:<br />
+                <input @bind="transferData.Username" />
+            </p>
+            <button class="btn btn-primary" @onclick="MakeTransfer">Transfer</button>
+        </div>
+    </div>*@
+    <div>
+        <div>
+            <span>Select currency:</span>
+            <select @bind="transferData.Currency">
+                @foreach (var wallet in WalletList)
+                {
+                    <option value="@wallet.Currency">@wallet.Currency</option>
+                }
+            </select>
+        </div>
+        <div>
+            <span>Input recipient name:</span>
+            <input type="text" @bind="transferData.Username" @onfocusout="ValidateUser" class="@RecipientInputClass" />
+        </div>
+        <div>
+            <span>Amount:</span>
+            <input type="number" @bind="transferData.Amount" />
+        </div>
+        <div>
+            <button class="btn btn-primary" @onclick="MakeTransfer">Transfer</button>
+        </div>
+    </div>
+}
+
+
+@code {
+    [Parameter]
+    public string SourceWalletId { get; set; }
+
+    private List<Wallet> WalletList { get; set; }
+
+    public TransferDto transferData { get; set; } = new TransferDto();
+
+    private string RecipientInputClass { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            WalletList = await HttpClient.GetFromJsonAsync<List<Wallet>>($"api/wallet");
+            transferData.Currency = WalletList.FirstOrDefault()?.Currency;
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+    }
+
+    private async Task ValidateUser()
+    {
+        try
+        {
+            var result = await HttpClient.GetFromJsonAsync<UserValidationResult>($"api/user/{transferData.Username}/validate");
+
+            if (result.Exists)
+            {
+                RecipientInputClass = "border border-success";
+            }
+            else
+            {
+                RecipientInputClass = "border border-danger";
+            }
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+    }
+
+    private async Task MakeTransfer()
+    {
+        try
+        {
+            var response = await HttpClient.PostAsJsonAsync($"api/wallet/transfer", transferData);
+            navManager.NavigateTo($"wallets?{Constants.transferSuccess}={response.IsSuccessStatusCode}");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+    }
+}
