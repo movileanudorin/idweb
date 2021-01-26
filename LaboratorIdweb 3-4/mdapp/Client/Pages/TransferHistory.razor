@@ -1,0 +1,120 @@
+﻿@page "/transfer/history"
+
+@inject HttpClient HttpClient
+
+@attribute [Authorize]
+
+<style>
+    /* Pagination links */
+    .pagination a {
+        color: black;
+        float: left;
+        padding: 8px 16px;
+        text-decoration: none;
+        transition: background-color .3s;
+    }
+
+    /* Style the active/current link */
+    .pagination a.active {
+        background-color: dodgerblue;
+        color: white;
+    }
+
+    /* Add a grey background color on mouse-over */
+    .pagination a:hover:not(.active) {background-color: #ddd;}
+</style>
+
+<h3>Transfer History</h3>
+<td>
+    <button class="btn @(direction == Direction.Inbound ? "btn-secondary" : " btn-outline-secondary")"
+            @onclick="() => ChangeDirection(Direction.Inbound)">
+        Inbound
+    </button>
+</td>
+<td>
+    <button class="btn @(direction == Direction.Outbound ? "btn-secondary" : " btn-outline-secondary")"
+            @onclick="() => ChangeDirection(Direction.Outbound)">
+        Outbound
+    </button>
+</td>
+
+@if (transactionsData?.Transactions == null)
+{
+    <div>Loading...</div>
+}
+else
+{    <table class="table">
+         <thead>
+         <tr>
+             <td>Date</td>
+             <td>Amount</td>
+             <td>DestinationWalletId</td>
+             <td>SourceWalletId</td>
+             <td>Id</td>
+         </tr>
+         </thead>
+         <tbody>
+         @foreach (var transaction in transactionsData.Transactions)
+         {
+             <tr>
+                 <td>@transaction.Date</td>
+                 <td>@transaction.Amount</td>
+                 <td>@transaction.DestinationWalletId</td>
+                 <td>@transaction.SourceWalletId</td>
+                 <td>@transaction.Id</td>
+             </tr>
+         }
+         </tbody>
+     </table>
+
+    <div class="pagination">
+        <a  @onclick="() => LoadTransactions(Math.Clamp(pageNumber - 1, 1, CalculatePageCount()))">&laquo;</a>
+        @for (int i = Math.Clamp(pageNumber - 2, 1, CalculatePageCount()); i <= Math.Clamp(pageNumber + 2, 1, CalculatePageCount()); i++)
+        {
+            var pn = i;
+            <a class="@(pn == pageNumber ? "active" : "")" @onclick="() => LoadTransactions(pn)">@pn</a>
+        }
+        <a @onclick="() => LoadTransactions(Math.Clamp(pageNumber + 1, 1, CalculatePageCount()))">&raquo;</a>
+    </div>
+}
+
+@code {
+
+    private TransactionsHistoryData transactionsData;
+
+    private int pageNumber = 1;
+    private int itemsPerPage = 10;
+
+    private Direction direction;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTransactions(pageNumber);
+    }
+
+    private async Task LoadTransactions(int pNam)
+    {
+        try
+        {
+            transactionsData = await HttpClient.GetFromJsonAsync<TransactionsHistoryData>($"api/wallet/transfers/{itemsPerPage}/{pNam}?direction={direction}");
+            pageNumber = pNam;
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+    }
+
+    private int CalculatePageCount()
+    {
+        var div = transactionsData.ItemCount / itemsPerPage;
+        var mod = transactionsData.ItemCount % itemsPerPage;
+        return div + (mod > 0 ? 1 : 0);
+    }
+
+    private async Task ChangeDirection(Direction dir)
+    {
+        direction = dir == direction ? Direction.None : dir;
+        await LoadTransactions(pageNumber);
+    }
+}
